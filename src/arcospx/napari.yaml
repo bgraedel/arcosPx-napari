@@ -6,27 +6,20 @@ visibility: public
 categories: ["Annotation", "Segmentation", "Acquisition"]
 contributions:
   commands:
-    - id: arcosPx-napari.make_sample_data
-      python_name: arcospx._sample_data:make_sample_data
-      title: Load sample data from arcosPx
-    - id: arcosPx-napari.make_qwidget
-      python_name: arcospx._widget:ExampleQWidget
-      title: Make example QWidget
-    - id: arcosPx-napari.make_magic_widget
-      python_name: arcospx._widget:example_magic_widget
-      title: Make example magic widget
-    - id: arcosPx-napari.make_func_widget
-      python_name: arcospx._widget:example_function_widget
-      title: Make example function widget
+    - id: arcosPx-napari.remove_background
+      python_name: arcospx._widget:remove_background
+      title: Remove Background
+    - id: arcosPx-napari.track_events
+      python_name: arcospx._widget:track_events
+      title: Track Events
   sample_data:
     - command: arcosPx-napari.make_sample_data
       display_name: arcosPx
       key: unique_id.1
   widgets:
-    - command: arcosPx-napari.make_qwidget
-      display_name: Example QWidget
-    - command: arcosPx-napari.make_magic_widget
-      display_name: Example Magic Widget
-    - command: arcosPx-napari.make_func_widget
+    - command: arcosPx-napari.remove_background
       autogenerate: true
-      display_name: Example Function Widget
+      display_name: Remove Background
+    - command: arcosPx-napari.track_events
+      autogenerate: true
+      display_name: Track Events
