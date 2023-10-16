@@ -25,10 +25,12 @@ def remove_background(
         filter_type: str = "gaussian",
         size_0: int = 20,
         size_1: int = 5,
-        size_2: int = 5
+        size_2: int = 5,
+        dims: str = "TXY",
+        crop_time_axis: bool = True
     ) -> LayerDataTuple:
     size = (size_0, size_1, size_2)
-    removed_background = remove_image_background(image.data, filter_type, size)
+    removed_background = remove_image_background(image.data, filter_type, size, dims, crop_time_axis)
     layer_properties = {
         "name": f"{image.name} background removed",
         "metadata": {
@@ -36,6 +38,8 @@ def remove_background(
             "size_0": size_0,
             "size_1": size_1,
             "size_2": size_2,
+            "dims": dims,
+            "crop_time_axis": crop_time_axis,
             "filename": image.name,
         },
     }
@@ -48,11 +52,13 @@ def track_events(
     eps: int = 10,
     epsPrev: int = 50,
     minClSz: int = 50,
+    minSamples: int = 2,
     nPrev: int = 2,
+    dims: str = "TXY",
 ) -> LayerDataTuple:
     t_filter_size = 20
     selected_image_bg = remove_image_background(image_selector.data, size=(t_filter_size, 5, 5))
-    img_tracked = track_events_image(selected_image_bg >= threshold, eps, epsPrev, minClSz, nPrev)
+    img_tracked = track_events_image(selected_image_bg >= threshold, eps = eps, epsPrev = epsPrev, minClSz = minClSz, minSamples = minSamples, nPrev = nPrev, dims = dims)
 
     # Like this we create the layer as a layer-data-tuple object which will automatically be parsed by napari and added to the viewer
     # This is more flexible and does not require the function to know about the viewer directly
