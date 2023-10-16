@@ -13,7 +13,7 @@ from magicgui import magic_factory
 from napari import viewer
 from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget
 from napari.types import LayerDataTuple
-from napari.layers  import Image
+from napari.layers import Image
 from magicgui import magicgui
 
 if TYPE_CHECKING:
