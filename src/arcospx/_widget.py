@@ -57,8 +57,9 @@ def track_events(
     dims: str = "TXY",
 ) -> LayerDataTuple:
     t_filter_size = 20
-    selected_image_bg = remove_image_background(image_selector.data, size=(t_filter_size, 5, 5))
-    img_tracked = track_events_image(selected_image_bg >= threshold, eps = eps, epsPrev = epsPrev, minClSz = minClSz, minSamples = minSamples, nPrev = nPrev, dims = dims)
+    #selected_image_bg = remove_image_background(image_selector.data, size=(t_filter_size, 5, 5))
+    selected_image = image_selector.data
+    img_tracked = track_events_image(selected_image >= threshold, eps = eps, epsPrev = epsPrev, minClSz = minClSz, minSamples = minSamples, nPrev = nPrev, dims = dims)
 
     # Like this we create the layer as a layer-data-tuple object which will automatically be parsed by napari and added to the viewer
     # This is more flexible and does not require the function to know about the viewer directly
