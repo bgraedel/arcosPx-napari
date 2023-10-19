@@ -6,14 +6,17 @@ import napari
 from skimage.io import imread
 from numpy.testing import assert_array_equal
 from napari.layers.image import Image
+from arcos4py.tools import remove_image_background, track_events_image
 
-def test_remove_background():
-    """Test background removal on a simple image."""
-    test_img = imread('src/arcospx/_tests/test_data/1_growing.tif')
-    test_img = Image(test_img)
-    true_img = imread('src/arcospx/_tests/test_data/1_growing_true.tif')
-    #test_img = np.where(test_img == 255, 0, 1)
-    removed_bg_img = remove_background(test_img.data, filter_type="gaussian", size_0=1, size_1=1, size_2=1)
+def test_remove_background(make_napari_viewer):
+    """
+    Test background removal on a simple image.
+    """
+    viewer = make_napari_viewer()
+    test_img = imread('test_data/1_growing.tif')
+    viewer.add_image(test_img, name='test_img')
+    true_img = imread('test_data/1_growing_true.tif')
+    removed_bg_img,_,_ = remove_background(viewer.layers['test_img'], filter_type="gaussian", size_0=1, size_1=1, size_2=1)
     assert_array_equal(removed_bg_img, true_img)
 
 
@@ -21,12 +24,14 @@ def test_track_events():
     """
     Test tracking on a simple image.
     """
-    test_img = imread('test_data/test_data_track_events.tif')
-    test_img = Image(test_img)
-    true_img = imread('test_data/test_data_track_events_true.tif')
-    #test_img = np.where(test_img == 255, 0, 1)
-    tracked_img = track_events(test_img.data, threshold=300, eps=10, epsPrev=50, minClSz=50, nPrev=2)
+    viewer = napari.Viewer()
+    test_img = imread('test_data/test_track_events_bg_rm.tif')
+    viewer.add_image(test_img, name='test_img')
+    true_img = imread('test_data/test_track_events_true_bg_rm.tif')
+    tracked_img,_,_ = track_events(viewer.layers['test_img'], threshold=300, eps=10, epsPrev=50, minClSz=50, minSamples=2, nPrev=2)
     assert_array_equal(tracked_img, true_img)
+
+
 
 # make_napari_viewer is a pytest fixture that returns a napari viewer object
 # capsys is a pytest fixture that captures stdout and stderr output streams
