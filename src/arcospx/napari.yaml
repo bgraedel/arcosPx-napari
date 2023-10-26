@@ -18,8 +18,6 @@ contributions:
       key: unique_id.1
   widgets:
     - command: arcosPx-napari.remove_background
-      autogenerate: true
       display_name: Remove Background
     - command: arcosPx-napari.track_events
-      autogenerate: true
       display_name: Track Events

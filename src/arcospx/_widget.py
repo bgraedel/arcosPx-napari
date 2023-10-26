@@ -15,15 +15,15 @@ from qtpy.QtWidgets import QHBoxLayout, QPushButton, QWidget
 from napari.types import LayerDataTuple
 from napari.layers import Image
 from napari.qt.threading import thread_worker, FunctionWorker
+from napari.utils import progress
 from magicgui import magicgui
 
 
 if TYPE_CHECKING:
     import napari
 
-@magic_factory(pbar={"visible": False, "max":0, "label": "Processing..."})
+@magic_factory()
 def remove_background(
-        pbar: widgets.ProgressBar,
         image: Image,
         filter_type: str = "gaussian",
         size_0: int = 20,
@@ -33,11 +33,10 @@ def remove_background(
         crop_time_axis: bool = False
     ) -> FunctionWorker[LayerDataTuple]:
     size = (size_0, size_1, size_2)
-
-    @thread_worker(connect={"returned": pbar.hide})
-    def remove_image_background() -> LayerDataTuple:
+    pbar = progress(total=0)
+    @thread_worker(connect={'returned': pbar.close})
+    def remove_image_background_2() -> LayerDataTuple:
         removed_background = remove_image_background(image.data, filter_type, size, dims, crop_time_axis)
-
         layer_properties = {
             "name": f"{image.name} background removed",
             "metadata": {
@@ -47,15 +46,14 @@ def remove_background(
                 "size_2": size_2,
                 "dims": dims,
                 "crop_time_axis": crop_time_axis,
-                "filename": image.name,},}
+                "filename": image.name,}}
 
 
         return (removed_background, layer_properties, "image")
 
-    pbar.show()
-    return remove_image_background()
+    return remove_image_background_2()
 
-
+@magic_factory()
 def track_events(
     image_selector: Image,
     threshold: int = 300,
@@ -65,28 +63,32 @@ def track_events(
     minSamples: int = 2,
     nPrev: int = 2,
     dims: str = "TXY",
-) -> LayerDataTuple:
+) -> FunctionWorker[LayerDataTuple]:
     t_filter_size = 20
-    #selected_image_bg = remove_image_background(image_selector.data, size=(t_filter_size, 5, 5))
-    selected_image = image_selector.data
-    img_tracked = track_events_image(selected_image >= threshold, eps = eps, epsPrev = epsPrev, minClSz = minClSz, minSamples = minSamples, nPrev = nPrev, dims = dims)
+    pbar = progress(total=0)
 
-    # Like this we create the layer as a layer-data-tuple object which will automatically be parsed by napari and added to the viewer
-    # This is more flexible and does not require the function to know about the viewer directly
-    # Additionally like this you can now set the metadata of the layer
-    layer_properties = {
-        "name": f"{image_selector.name} tracked",
-        "metadata": {
-            "threshold": threshold,
-            "eps": eps,
-            "epsPrev": epsPrev,
-            "minClSz": minClSz,
-            "nPrev": nPrev,
-            "filename": image_selector.name,  ## eg. setting medatada to the name of the image layer
-        },
-    }
+    @thread_worker(connect={'returned': pbar.close})
+    def track_events_2() -> LayerDataTuple:
+        selected_image = image_selector.data
+        img_tracked = track_events_image(selected_image >= threshold, eps = eps, epsPrev = epsPrev, minClSz = minClSz, minSamples = minSamples, nPrev = nPrev, dims = dims)
+
+        # Like this we create the layer as a layer-data-tuple object which will automatically be parsed by napari and added to the viewer
+        # This is more flexible and does not require the function to know about the viewer directly
+        # Additionally like this you can now set the metadata of the layer
+        layer_properties = {
+            "name": f"{image_selector.name} tracked",
+            "metadata": {
+                "threshold": threshold,
+                "eps": eps,
+                "epsPrev": epsPrev,
+                "minClSz": minClSz,
+                "nPrev": nPrev,
+                "filename": image_selector.name,  ## eg. setting medatada to the name of the image layer
+         },}
+        return (img_tracked, layer_properties, "labels")
+
     # return the layer data tuple
-    return (img_tracked, layer_properties, "labels")
+    return track_events_2()
 
 
 

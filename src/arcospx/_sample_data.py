@@ -30,7 +30,3 @@ def make_sample_data():
     }
     return [(numpy.random.rand(512, 512), image_kwargs)]
 
-data = make_sample_data()
-
-print(data[0][0].shape)
-#data_2 = make_sample_data()
