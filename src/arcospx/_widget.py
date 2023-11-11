@@ -45,12 +45,8 @@ def remove_background(
     def remove_image_background_2() -> LayerDataTuple:
         global abort_flag
 
-        # Check abort flag at appropriate intervals
-        if abort_flag:
-            # Return an error message
-            # return "Interrupt error: Operation aborted by user."
-            # Or raise a custom exception
-            raise AbortException("Operation aborted by user.")
+        # Reset the abort flag at the start of each execution
+        abort_flag = False
 
         removed_background = remove_image_background(image.data, filter_type, size, dims, crop_time_axis)
 
@@ -58,6 +54,7 @@ def remove_background(
             # Return an error message
             # return "Interrupt error: Operation aborted by user."
             # Or raise a custom exception
+            pbar.close()
             raise AbortException("Operation aborted by user.")
 
         layer_properties = {
