@@ -16,6 +16,8 @@ from napari.types import LayerDataTuple
 from napari.layers import Image
 from napari.qt.threading import thread_worker, FunctionWorker
 from napari.utils import progress
+from qtpy.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel
+
 from magicgui import magicgui
 
 
@@ -73,11 +75,6 @@ def remove_background(
 
     return remove_image_background_2()
 
-@magic_factory()
-def abort_process():
-    global abort_flag
-    abort_flag = True
-
 
 @magic_factory()
 def track_events(
@@ -95,8 +92,27 @@ def track_events(
 
     @thread_worker(connect={'returned': pbar.close})
     def track_events_2() -> LayerDataTuple:
+        global abort_flag
+
+        # Reset the abort flag at the start of each execution
+        abort_flag = False
+
+        if abort_flag:
+            # Return an error message
+            # return "Interrupt error: Operation aborted by user."
+            # Or raise a custom exception
+            pbar.close()
+            raise AbortException("Operation aborted by user.")
+
         selected_image = image_selector.data
         img_tracked = track_events_image(selected_image >= threshold, eps = eps, epsPrev = epsPrev, minClSz = minClSz, minSamples = minSamples, nPrev = nPrev, dims = dims)
+
+        if abort_flag:
+            # Return an error message
+            # return "Interrupt error: Operation aborted by user."
+            # Or raise a custom exception
+            pbar.close()
+            raise AbortException("Operation aborted by user.")
 
         # Like this we create the layer as a layer-data-tuple object which will automatically be parsed by napari and added to the viewer
         # This is more flexible and does not require the function to know about the viewer directly
@@ -117,6 +133,9 @@ def track_events(
     return track_events_2()
 
 
-
+@magic_factory()
+def abort_process():
+    global abort_flag
+    abort_flag = True
 
 

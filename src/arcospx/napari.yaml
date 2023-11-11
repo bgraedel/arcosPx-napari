@@ -25,4 +25,4 @@ contributions:
     - command: arcosPx-napari.track_events
       display_name: Track Events
     - command: arcosPx-napari.abort_process
-      display_name: Abort Process
+      display_name: Abort Current Process
