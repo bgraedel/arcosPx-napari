@@ -12,6 +12,9 @@ contributions:
     - id: arcosPx-napari.track_events
       python_name: arcospx._widget:track_events
       title: Track Events
+    - id: arcosPx-napari.abort_process
+      python_name: arcospx._widget:abort_process
+      title: Abort Process
   sample_data:
     - command: arcosPx-napari.make_sample_data
       display_name: arcosPx
@@ -21,3 +24,5 @@ contributions:
       display_name: Remove Background
     - command: arcosPx-napari.track_events
       display_name: Track Events
+    - command: arcosPx-napari.abort_process
+      display_name: Abort Process

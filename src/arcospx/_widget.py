@@ -22,6 +22,13 @@ from magicgui import magicgui
 if TYPE_CHECKING:
     import napari
 
+# A global flag for aborting the process
+abort_flag = False
+
+# Optional: Define a custom exception for aborting the process
+class AbortException(Exception):
+    pass
+
 @magic_factory()
 def remove_background(
         image: Image,
@@ -36,7 +43,23 @@ def remove_background(
     pbar = progress(total=0)
     @thread_worker(connect={'returned': pbar.close})
     def remove_image_background_2() -> LayerDataTuple:
+        global abort_flag
+
+        # Check abort flag at appropriate intervals
+        if abort_flag:
+            # Return an error message
+            # return "Interrupt error: Operation aborted by user."
+            # Or raise a custom exception
+            raise AbortException("Operation aborted by user.")
+
         removed_background = remove_image_background(image.data, filter_type, size, dims, crop_time_axis)
+
+        if abort_flag:
+            # Return an error message
+            # return "Interrupt error: Operation aborted by user."
+            # Or raise a custom exception
+            raise AbortException("Operation aborted by user.")
+
         layer_properties = {
             "name": f"{image.name} background removed",
             "metadata": {
@@ -52,6 +75,12 @@ def remove_background(
         return (removed_background, layer_properties, "image")
 
     return remove_image_background_2()
+
+@magic_factory()
+def abort_process():
+    global abort_flag
+    abort_flag = True
+
 
 @magic_factory()
 def track_events(
@@ -89,8 +118,6 @@ def track_events(
 
     # return the layer data tuple
     return track_events_2()
-
-
 
 
 
