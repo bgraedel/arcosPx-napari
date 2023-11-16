@@ -8,62 +8,46 @@ from numpy.testing import assert_array_equal
 from qtpy.QtCore import QTimer
 from napari.layers.image import Image
 from arcos4py.tools import remove_image_background, track_events_image
+from pytestqt import qtbot
 
-# def test_remove_background():
-#     """
-#     Test background removal on a simple image.
-#     """
-#     viewer = napari.Viewer()
-#     test_img = imread('test_data/1_growing.tif')
-#     viewer.add_image(test_img, name='test_img')
-#     true_img = imread('test_data/1_growing_true.tif')
-#     removed_bg_img, _, _ = remove_background(image=viewer.layers['test_img'], filter_type="gaussian", size_0=1,
-#                                              size_1=1, size_2=1)
-#     assert_array_equal(removed_bg_img, true_img)
-
-def test_remove_background(make_napari_viewer):
+def test_remove_background(make_napari_viewer, qtbot):
     """
     Test background removal on a simple image.
     """
     viewer = make_napari_viewer()
     test_img = imread('test_data/1_growing.tif')
-    true_img = imread('test_data/1_growing_true.tif')
-
     viewer.add_image(test_img, name='test_img')
+    true_img = imread('test_data/1_growing_true.tif')
+    _,widget = viewer.window.add_plugin_dock_widget("arcosPx-napari", "Remove Background")
+    widget.image.value = viewer.layers['test_img']
+    widget.filter_type.value = "gaussian"
+    widget.size_0.value = 1
+    widget.size_1.value = 1
+    widget.size_2.value = 1
+    worker = widget()
+    with qtbot.waitSignal(worker.finished, timeout=10000):
+        pass
+    assert_array_equal(viewer.layers[1].data, true_img)
 
-    # Create the widget from the factory
-    remove_background_widget = remove_background()
 
-    # Set the parameters for the widget
-    remove_background_widget.image.value = viewer.layers['test_img']
-    remove_background_widget.filter_type.value = "gaussian"
-    remove_background_widget.size_0.value = 1
-    remove_background_widget.size_1.value = 1
-    remove_background_widget.size_2.value = 1
-
-    # Execute the widget's function and get the worker
-    worker = remove_background_widget()
-
-    # Prepare to capture the result
-    result = None
-
-    def on_returned(value):
-        nonlocal result
-        result = value
-        assert_array_equal(result[0], true_img)
-        pytest.exit("Test completed")
-
-    # Connect the returned signal of the worker to the on_returned function
-    worker.returned.connect(on_returned)
-
-# def test_track_events():
-#     """
-#     Test tracking on a simple image.
-#     """
-#     viewer = napari.Viewer()
-#     test_img = imread('test_data/test_data_track_events.tif')
-#     viewer.add_image(test_img, name='test_img')
-#     true_img = imread('test_data/test_track_events_true.tif')
-#     tracked_img,_,_ = track_events(viewer.layers['test_img'], threshold=300, eps=10, epsPrev=50, minClSz=50, minSamples=2, nPrev=2)
-#     assert_array_equal(tracked_img, true_img)
+def test_track_events(make_napari_viewer, qtbot):
+    """
+    Test tracking on a simple image.
+    """
+    viewer = make_napari_viewer()
+    test_img = imread('test_data/test_data_track_events.tif')
+    viewer.add_image(test_img, name='test_img')
+    true_img = imread('test_data/test_track_events_true.tif')
+    _, widget = viewer.window.add_plugin_dock_widget("arcosPx-napari", "Track Events")
+    widget.image_selector.value = viewer.layers['test_img']
+    widget.threshold.value = 300
+    widget.eps.value = 10
+    widget.epsPrev.value = 50
+    widget.minClSz.value = 50
+    widget.minSamples.value = 2
+    widget.nPrev.value = 2
+    worker = widget()
+    with qtbot.waitSignal(worker.finished, timeout=10000):
+        pass
+    assert_array_equal(viewer.layers[1].data, true_img)
 

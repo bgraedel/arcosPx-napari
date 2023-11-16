@@ -53,9 +53,6 @@ def remove_background(
         removed_background = remove_image_background(image.data, filter_type, size, dims, crop_time_axis)
 
         if abort_flag:
-            # Return an error message
-            # return "Interrupt error: Operation aborted by user."
-            # Or raise a custom exception
             pbar.close()
             raise AbortException("Operation aborted by user.")
 
