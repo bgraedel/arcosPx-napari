@@ -1,36 +1,53 @@
 import numpy as np
+import pytest
+from qtpy import QtCore
+from arcospx import make_sample_data, remove_background, track_events
+import napari
+from skimage.io import imread
+from numpy.testing import assert_array_equal
+from qtpy.QtCore import QTimer
+from napari.layers.image import Image
+from arcos4py.tools import remove_image_background, track_events_image
+from pytestqt import qtbot
 
-from arcospx import ExampleQWidget, example_magic_widget
-
-
-# make_napari_viewer is a pytest fixture that returns a napari viewer object
-# capsys is a pytest fixture that captures stdout and stderr output streams
-def test_example_q_widget(make_napari_viewer, capsys):
-    # make viewer and add an image layer using our fixture
+def test_remove_background(make_napari_viewer, qtbot):
+    """
+    Test background removal on a simple image.
+    """
     viewer = make_napari_viewer()
-    viewer.add_image(np.random.random((100, 100)))
+    test_img = imread('test_data/1_growing.tif')
+    viewer.add_image(test_img, name='test_img')
+    true_img = imread('test_data/1_growing_true.tif')
+    _,widget = viewer.window.add_plugin_dock_widget("arcosPx-napari", "Remove Background")
+    widget.image.value = viewer.layers['test_img']
+    widget.filter_type.value = "gaussian"
+    widget.size_0.value = 1
+    widget.size_1.value = 1
+    widget.size_2.value = 1
+    worker = widget()
+    with qtbot.waitSignal(worker.finished, timeout=10000):
+        pass
+    assert_array_equal(viewer.layers[1].data, true_img)
 
-    # create our widget, passing in the viewer
-    my_widget = ExampleQWidget(viewer)
 
-    # call our widget method
-    my_widget._on_click()
-
-    # read captured output and check that it's as we expected
-    captured = capsys.readouterr()
-    assert captured.out == "napari has 1 layers\n"
-
-
-def test_example_magic_widget(make_napari_viewer, capsys):
+def test_track_events(make_napari_viewer, qtbot):
+    """
+    Test tracking on a simple image.
+    """
     viewer = make_napari_viewer()
-    layer = viewer.add_image(np.random.random((100, 100)))
+    test_img = imread('test_data/test_data_track_events.tif')
+    viewer.add_image(test_img, name='test_img')
+    true_img = imread('test_data/test_track_events_true.tif')
+    _, widget = viewer.window.add_plugin_dock_widget("arcosPx-napari", "Track Events")
+    widget.image_selector.value = viewer.layers['test_img']
+    widget.threshold.value = 300
+    widget.eps.value = 10
+    widget.epsPrev.value = 50
+    widget.minClSz.value = 50
+    widget.minSamples.value = 2
+    widget.nPrev.value = 2
+    worker = widget()
+    with qtbot.waitSignal(worker.finished, timeout=10000):
+        pass
+    assert_array_equal(viewer.layers[1].data, true_img)
 
-    # this time, our widget will be a MagicFactory or FunctionGui instance
-    my_widget = example_magic_widget()
-
-    # if we "call" this object, it'll execute our function
-    my_widget(viewer.layers[0])
-
-    # read captured output and check that it's as we expected
-    captured = capsys.readouterr()
-    assert captured.out == f"you have selected {layer}\n"

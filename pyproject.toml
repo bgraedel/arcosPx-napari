@@ -10,7 +10,6 @@ write_to = "src/arcospx/_version.py"
 line-length = 79
 target-version = ['py38', 'py39', 'py310']
 
-
 [tool.ruff]
 line-length = 79
 select = [
