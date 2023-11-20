@@ -18,9 +18,10 @@ def test_remove_background(make_napari_viewer, qtbot):
     widget.size_0.value = 1
     widget.size_1.value = 1
     widget.size_2.value = 1
-    worker = widget()
-    with qtbot.waitSignal(worker.finished, timeout=10000):
-        pass
+
+    with qtbot.waitSignal(viewer.layers.events.inserted, timeout=10000):
+        worker = widget()
+
     assert_array_equal(viewer.layers[1].data, true_img)
 
 
@@ -40,6 +41,7 @@ def test_track_events(make_napari_viewer, qtbot):
     widget.minClSz.value = 1
     widget.minSamples.value = 1
     widget.nPrev.value = 1
+
     with qtbot.waitSignal(viewer.layers.events.inserted, timeout=10000):
         worker = widget()
 
