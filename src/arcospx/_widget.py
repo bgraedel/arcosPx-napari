@@ -100,6 +100,8 @@ def track_events(
     epsPrev: float = 0,
     minClSz: int = 9,
     nPrev: int = 1,
+    downscale=1,
+    use_predictor: bool = False,
     dims: str = "TXY",
 ) -> FunctionWorker[LayerDataTuple]:
     if arcos_worker is not None and arcos_worker.is_running:
@@ -127,14 +129,18 @@ def track_events(
             },
         }
 
+        eps_adjusted = eps / downscale
+        epsPrev_adjusted = epsPrev / downscale if epsPrev else None
+        minClSz_adjusted = int(minClSz ** (1 / downscale))
+
         linker = Linker(
-            eps=eps,
-            epsPrev=epsPrev if epsPrev else None,
-            minClSz=minClSz,
+            eps=eps_adjusted,
+            epsPrev=epsPrev_adjusted,
+            minClSz=minClSz_adjusted,
             nPrev=nPrev,
-            predictor=False,
+            predictor=use_predictor,
         )
-        tracker = ImageTracker(linker)
+        tracker = ImageTracker(linker, downscale)
         # find indices of T in dims
         img_tracked = np.zeros_like(selected_image, dtype=np.uint16)
         for idx, timepoint in enumerate(tracker.track(selected_image, dims)):
