@@ -134,9 +134,9 @@ def track_events(
         D = len([d for d in dims if d in dims])
 
         # Adjust parameters based on dimensionality
-        adjusted_eps = eps / downsample
-        adjusted_epsPrev = epsPrev / downsample if epsPrev else None
-        adjusted_minClSz = int(minClSz / (downsample**D))
+        adjusted_eps = eps / downscale
+        adjusted_epsPrev = epsPrev / downscale if epsPrev else None
+        adjusted_minClSz = int(minClSz / (downscale**D))
 
         linker = Linker(
             eps=adjusted_eps,
