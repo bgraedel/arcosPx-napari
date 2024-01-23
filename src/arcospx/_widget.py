@@ -91,7 +91,7 @@ def _on_track_events_init(widget):
 
 
 @magic_factory(
-    arcos_worker={"visible": False}, widget_init=_on_track_events_init
+    arcos_worker={"visible": False}, minClSz={"min": 1, "max": 100000}, widget_init=_on_track_events_init
 )
 def track_events(
     image_selector: Image,
