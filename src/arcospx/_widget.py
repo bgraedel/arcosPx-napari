@@ -131,7 +131,7 @@ def track_events(
 
         # Determine the dimensionality
         spatial_dims = set("XYZ")
-        D = len([d for d in dims if d in dims])
+        D = len([d for d in dims if d in spatial_dims])
 
         # Adjust parameters based on dimensionality
         adjusted_eps = eps / downscale
