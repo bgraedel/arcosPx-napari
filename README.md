@@ -7,11 +7,22 @@
 [![codecov](https://codecov.io/gh/bgraedel/arcosPx-napari/branch/main/graph/badge.svg)](https://codecov.io/gh/bgraedel/arcosPx-napari)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/arcosPx-napari)](https://napari-hub.org/plugins/arcosPx-napari)
 
-A plugin to track spatio-temporal correlations in images
 
-----------------------------------
+## Introduction
 
-This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
+This repository contains a dedicated ARCOS.px plugin for the [napari](https://napari.org/stable/) image viewer. It tracks spatio-temporal correlations in images as described in a publication of Grädel et al. _Tracking Coordinated Cellular Dynamics in Time-Lapse Microscopy with ARCOS.px_ ([link](https://doi.org/10.1101/2025.03.14.643386)).
+
+<p align="center">
+  <img alt="ARCOS.px logo" src="misc/ARCOS-px-logo.png" width="45%">
+&nbsp; &nbsp; &nbsp; &nbsp;
+  <img alt="CDL logo" src="misc/cellular-dynamics-lab-logo2.png" width="45%"> 
+</p>
+
+ARCOS.px is a computational method to identify and track clusters of correlated cell signaling in time-lapse microscopy images. 
+It is the latest addition to the [ARCOS ecosystem](https://arcos.gitbook.io/home) developed in the [Cellular Dynamics Lab](https://www.pertzlab.net) at the University of Bern.
+
+![ARCOS.px napari plugin screenshot](misc/napari-plugin.png)
+
 
 <!--
 Don't miss the full getting started guide to set up your new package:
@@ -20,6 +31,13 @@ https://github.com/napari/cookiecutter-napari-plugin#getting-started
 and review the napari docs for plugin developers:
 https://napari.org/stable/plugins/index.html
 -->
+
+## Example tracking
+
+Actin polymerization waves in REF52 fibroblasts treated with 50 ng/mL PDGF, 24h before imaging.
+
+![Polymerisation wave in REF52 cells](misc/tracked_waves_rgb_wLabels_F1-181.gif)
+
 
 ## Installation
 
