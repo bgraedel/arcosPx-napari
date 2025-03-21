@@ -1,10 +1,10 @@
 # arcosPx-napari
 
-[![License BSD-3](https://img.shields.io/pypi/l/arcosPx-napari.svg?color=green)](https://github.com/bgraedel/arcosPx-napari/raw/main/LICENSE)
+[![License BSD-3](https://img.shields.io/pypi/l/arcosPx-napari.svg?color=green)](https://github.com/pertzlab/arcosPx-napari/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/arcosPx-napari.svg?color=green)](https://pypi.org/project/arcosPx-napari)
 [![Python Version](https://img.shields.io/pypi/pyversions/arcosPx-napari.svg?color=green)](https://python.org)
-[![tests](https://github.com/bgraedel/arcosPx-napari/workflows/tests/badge.svg)](https://github.com/bgraedel/arcosPx-napari/actions)
-[![codecov](https://codecov.io/gh/bgraedel/arcosPx-napari/branch/main/graph/badge.svg)](https://codecov.io/gh/bgraedel/arcosPx-napari)
+[![tests](https://github.com/pertzlab/arcosPx-napari/workflows/tests/badge.svg)](https://github.com/pertzlab/arcosPx-napari/actions)
+[![codecov](https://codecov.io/gh/pertzlab/arcosPx-napari/branch/main/graph/badge.svg)](https://codecov.io/gh/pertzlab/arcosPx-napari)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/arcosPx-napari)](https://napari-hub.org/plugins/arcosPx-napari)
 
 
@@ -49,7 +49,7 @@ You can install `arcosPx-napari` via [pip]:
 
 To install latest development version :
 
-    pip install git+https://github.com/bgraedel/arcosPx-napari.git
+    pip install git+https://github.com/pertzlab/arcosPx-napari.git
 
 
 ## Contributing
@@ -77,7 +77,7 @@ If you encounter any problems, please [file an issue] along with a detailed desc
 [Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
 [cookiecutter-napari-plugin]: https://github.com/napari/cookiecutter-napari-plugin
 
-[file an issue]: https://github.com/bgraedel/arcosPx-napari/issues
+[file an issue]: https://github.com/pertzlab/arcosPx-napari/issues
 
 [napari]: https://github.com/napari/napari
 [tox]: https://tox.readthedocs.io/en/latest/
