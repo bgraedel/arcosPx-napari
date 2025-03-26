@@ -1,8 +1,9 @@
 """
 This module containst the magic factory widgets for arcospx
 """
+
 from time import sleep
-from typing import Literal, Union
+from typing import List, Literal, Union
 
 import numpy as np
 from arcos4py.tools import remove_image_background
@@ -14,6 +15,8 @@ from napari.types import LayerDataTuple
 from napari.utils import progress
 from napari.utils.notifications import show_info
 from skimage.filters import threshold_otsu
+
+from arcospx.utils import tracker_to_napari_tracks
 
 
 def do_nothing_function():
@@ -54,8 +57,6 @@ def remove_background(
 
 def _on_thresholder_init(widget):
     def update_slider(image: Image):
-        # probably don't want to read then throw this array away...
-        # but just an example
         min_value = np.min(image.data)
         max_value = np.max(image.data)
         widget.threshold.max = max_value
@@ -63,6 +64,8 @@ def _on_thresholder_init(widget):
         widget.threshold.value = threshold_otsu(image.data)
 
     widget.image_selector.changed.connect(update_slider)
+    if widget.image_selector.value is not None:
+        update_slider(widget.image_selector.value)
 
 
 @magic_factory(
@@ -91,7 +94,7 @@ def _on_track_events_init(widget):
 
 
 @magic_factory(
-    arcos_worker={"visible": False}, minClSz={"min": 1, "max": 100000}, widget_init=_on_track_events_init
+    arcos_worker={"visible": False}, widget_init=_on_track_events_init
 )
 def track_events(
     image_selector: Image,
@@ -100,8 +103,10 @@ def track_events(
     epsPrev: float = 0,
     minClSz: int = 9,
     nPrev: int = 1,
+    split_merge_stability: int = 0,
     downscale=1,
     use_predictor: bool = False,
+    remove_small_clusters: bool = False,
     dims: str = "TXY",
 ) -> FunctionWorker[LayerDataTuple]:
     if arcos_worker is not None and arcos_worker.is_running:
@@ -112,11 +117,33 @@ def track_events(
     pbar = progress(total=image_selector.data.shape[0])
 
     @thread_worker(connect={"finished": pbar.close, "yielded": pbar.update})
-    def track_events_2() -> LayerDataTuple:
-        # Reset the abort flag at the start of each executio
-
+    def track_events_2() -> List[LayerDataTuple]:
         selected_image = image_selector.data
-        # Adjust parameters based on dimensionality
+
+        eps_adjusted = eps / downscale
+        epsPrev_adjusted = epsPrev / downscale if epsPrev else None
+        minClSz_adjusted = int(minClSz ** (1 / downscale))
+
+        allow_merges = split_merge_stability > 0
+        allow_splits = split_merge_stability > 0
+
+        linker = Linker(
+            eps=eps_adjusted,
+            epsPrev=epsPrev_adjusted,
+            minClSz=minClSz_adjusted,
+            nPrev=nPrev,
+            predictor=use_predictor,
+            allow_merges=allow_splits,
+            allow_splits=allow_merges,
+            stability_threshold=split_merge_stability,
+            remove_small_clusters=False,
+        )
+
+        tracker = ImageTracker(linker, downscale)
+        img_tracked = np.zeros_like(selected_image, dtype=np.uint16)
+        for idx, timepoint in enumerate(tracker.track(selected_image, dims)):
+            img_tracked[idx] = timepoint
+            yield 1
 
         layer_properties = {
             "name": f"{image_selector.name} tracked",
@@ -125,36 +152,50 @@ def track_events(
                 "epsPrev": epsPrev,
                 "minClSz": minClSz,
                 "nPrev": nPrev,
-                "filename": image_selector.name,  ## eg. setting medatada to the name of the image layer
+                "split_merge_stability": split_merge_stability,
+                "downscale": downscale,
+                "use_predictor": use_predictor,
+                "remove_small_clusters": remove_small_clusters,
+                "filename": image_selector.name,
             },
         }
 
-        # Determine the dimensionality
-        spatial_dims = set("XYZ")
-        D = len([d for d in dims if d in spatial_dims])
+        layers: List[LayerDataTuple] = [
+            (img_tracked, layer_properties, "labels")
+        ]
 
-        # Adjust parameters based on dimensionality
-        adjusted_eps = eps / downscale
-        adjusted_epsPrev = epsPrev / downscale if epsPrev else None
-        adjusted_minClSz = int(minClSz / (downscale**D))
+        if allow_merges or allow_splits:
+            data, properties, graph = tracker_to_napari_tracks(
+                linker.lineage_tracker,
+                label_stack=img_tracked.astype(int),
+                spacing=(1.0, 1.0, 1.0),
+                time_axis=0,
+            )
+            track_layer = (
+                data,
+                {
+                    "name": f"{image_selector.name} tracks",
+                    "properties": properties,
+                    "graph": graph,
+                },
+                "tracks",
+            )
+            layers.append(track_layer)
 
-        linker = Linker(
-            eps=adjusted_eps,
-            epsPrev=adjusted_epsPrev,
-            minClSz=adjusted_minClSz,
-            nPrev=nPrev,
-            predictor=use_predictor,
-        )
-        tracker = ImageTracker(linker, downscale)
-        # find indices of T in dims
-        img_tracked = np.zeros_like(selected_image, dtype=np.uint16)
-        for idx, timepoint in enumerate(tracker.track(selected_image, dims)):
-            img_tracked[idx] = timepoint
-            yield 1
-
-        sleep(0.1)  # need this for the tests to pass ...
-        return (img_tracked, layer_properties, "labels")
+        sleep(0.1)
+        return layers
 
     # return the layer data tuple
     arcos_worker = track_events_2()
     return arcos_worker
+
+
+if __name__ == "__main__":
+    import napari
+    from napari import Viewer
+
+    viewer = Viewer()
+    viewer.window.add_dock_widget(remove_background())
+    viewer.window.add_dock_widget(thresholder())
+    viewer.window.add_dock_widget(track_events())
+    napari.run()
