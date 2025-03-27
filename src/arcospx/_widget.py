@@ -3,7 +3,7 @@ This module containst the magic factory widgets for arcospx
 """
 
 from time import sleep
-from typing import List, Literal, Union
+from typing import Literal, Union
 
 import numpy as np
 from arcos4py.tools import remove_image_background
@@ -94,7 +94,34 @@ def _on_track_events_init(widget):
 
 
 @magic_factory(
-    arcos_worker={"visible": False}, widget_init=_on_track_events_init
+    arcos_worker={"visible": False},
+    widget_init=_on_track_events_init,
+    call_button="Run",
+    eps={
+        "tooltip": "Clustering distance threshold (per frame). Adjusted for downscaling."
+    },
+    epsPrev={
+        "tooltip": "Linking distance to previous frames. Set 0 to disable. Adjusted for downscaling."
+    },
+    minClSz={
+        "tooltip": "Minimum cluster size (pixels). Adjusted for downscaling and dimensionality."
+    },
+    nPrev={"tooltip": "Number of previous frames to consider for linking."},
+    split_merge_stability={
+        "tooltip": "Minimum stable frames before allowing splits/merges (0=disable)."
+    },
+    downscale={
+        "tooltip": "Downsampling factor for faster processing (>=1). Affects spatial parameters."
+    },
+    use_predictor={
+        "tooltip": "Use motion prediction for better linking between frames."
+    },
+    remove_small_clusters={
+        "tooltip": "Remove clusters smaller than minClSz after tracking."
+    },
+    dims={
+        "tooltip": "Dimension order of input data. Spatial dimensions (X,Y,Z) affect parameter scaling."
+    },
 )
 def track_events(
     image_selector: Image,
@@ -104,50 +131,60 @@ def track_events(
     minClSz: int = 9,
     nPrev: int = 1,
     split_merge_stability: int = 0,
-    downscale=1,
+    downscale: int = 1,
     use_predictor: bool = False,
     remove_small_clusters: bool = False,
-    dims: str = "TXY",
+    dims: Literal["TXY", "TYX", "TZXY", "ZTYX", "XY", "ZYX"] = "TXY",
 ) -> FunctionWorker[LayerDataTuple]:
     if arcos_worker is not None and arcos_worker.is_running:
         arcos_worker.quit()
         show_info("Operation aborted by user.")
         return FunctionWorker(do_nothing_function)
 
+    # Validate parameters
+    if downscale < 1:
+        raise ValueError("Downscale must be ≥1")
+    if minClSz < 1:
+        raise ValueError("minClSz must be ≥1")
+
     pbar = progress(total=image_selector.data.shape[0])
 
     @thread_worker(connect={"finished": pbar.close, "yielded": pbar.update})
-    def track_events_2() -> List[LayerDataTuple]:
-        selected_image = image_selector.data
+    def track_events_worker() -> list[LayerDataTuple]:
+        try:
+            selected_image = image_selector.data
+            spatial_dims = sum(1 for c in dims.upper() if c in {"X", "Y", "Z"})
 
-        eps_adjusted = eps / downscale
-        epsPrev_adjusted = epsPrev / downscale if epsPrev else None
-        minClSz_adjusted = int(minClSz ** (1 / downscale))
+            # Adjust parameters for downscaling
+            eps_adjusted = eps / downscale
+            epsPrev_adjusted = epsPrev / downscale if epsPrev else None
+            minClSz_adjusted = max(
+                1, int(minClSz / (downscale**spatial_dims))
+            )
 
-        allow_merges = split_merge_stability > 0
-        allow_splits = split_merge_stability > 0
+            linker = Linker(
+                eps=eps_adjusted,
+                epsPrev=epsPrev_adjusted,
+                minClSz=minClSz_adjusted,
+                nPrev=nPrev,
+                predictor=use_predictor,
+                allow_merges=split_merge_stability > 0,
+                allow_splits=split_merge_stability > 0,
+                stability_threshold=split_merge_stability,
+                remove_small_clusters=remove_small_clusters,
+            )
 
-        linker = Linker(
-            eps=eps_adjusted,
-            epsPrev=epsPrev_adjusted,
-            minClSz=minClSz_adjusted,
-            nPrev=nPrev,
-            predictor=use_predictor,
-            allow_merges=allow_splits,
-            allow_splits=allow_merges,
-            stability_threshold=split_merge_stability,
-            remove_small_clusters=False,
-        )
+            tracker = ImageTracker(linker, downscale)
+            img_tracked = np.zeros_like(selected_image, dtype=np.uint16)
 
-        tracker = ImageTracker(linker, downscale)
-        img_tracked = np.zeros_like(selected_image, dtype=np.uint16)
-        for idx, timepoint in enumerate(tracker.track(selected_image, dims)):
-            img_tracked[idx] = timepoint
-            yield 1
+            for idx, timepoint in enumerate(
+                tracker.track(selected_image, dims)
+            ):
+                img_tracked[idx] = timepoint
+                yield 1
 
-        layer_properties = {
-            "name": f"{image_selector.name} tracked",
-            "metadata": {
+            # Prepare layer metadata
+            meta = {
                 "eps": eps,
                 "epsPrev": epsPrev,
                 "minClSz": minClSz,
@@ -156,38 +193,57 @@ def track_events(
                 "downscale": downscale,
                 "use_predictor": use_predictor,
                 "remove_small_clusters": remove_small_clusters,
-                "filename": image_selector.name,
-            },
-        }
+                "dims": dims,
+                "spatial_dims": spatial_dims,
+                "adjusted_eps": eps_adjusted,
+                "adjusted_minClSz": minClSz_adjusted,
+            }
 
-        layers: List[LayerDataTuple] = [
-            (img_tracked, layer_properties, "labels")
-        ]
+            layers = [
+                (
+                    img_tracked,
+                    {
+                        "name": f"{image_selector.name} tracked",
+                        "metadata": meta,
+                    },
+                    "labels",
+                )
+            ]
 
-        if allow_merges or allow_splits:
-            data, properties, graph = tracker_to_napari_tracks(
-                linker.lineage_tracker,
-                label_stack=img_tracked.astype(int),
-                spacing=(1.0, 1.0, 1.0),
-                time_axis=0,
-            )
-            track_layer = (
-                data,
-                {
-                    "name": f"{image_selector.name} tracks",
-                    "properties": properties,
-                    "graph": graph,
-                },
-                "tracks",
-            )
-            layers.append(track_layer)
+            # Always generate tracks if any events detected
+            if np.any(img_tracked > 0):
+                data, properties, graph = tracker_to_napari_tracks(
+                    linker.lineage_tracker,
+                    label_stack=img_tracked.astype(int),
+                    spacing=(1.0, 1.0, 1.0),
+                    time_axis=0,
+                )
+                layers.append(
+                    (
+                        data,
+                        {
+                            "name": f"{image_selector.name} tracks",
+                            "properties": properties,
+                            "graph": graph,
+                            "metadata": meta,
+                        },
+                        "tracks",
+                    )
+                )
 
-        sleep(0.1)
-        return layers
+            return layers
+        except Exception as e:
+            show_info(f"Error during tracking: {str(e)}")
+            raise
 
-    # return the layer data tuple
-    arcos_worker = track_events_2()
-    return arcos_worker
+    worker = track_events_worker()
+
+    # Add error handling
+    def handle_error(exc):
+        show_info(f"Tracking failed: {str(exc)}")
+
+    worker.errored.connect(handle_error)
+    return worker
 
 
 if __name__ == "__main__":
