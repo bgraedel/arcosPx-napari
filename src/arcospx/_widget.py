@@ -1,6 +1,7 @@
 """
 This module containst the magic factory widgets for arcospx
 """
+
 from time import sleep
 from typing import Literal, Union
 
@@ -14,6 +15,8 @@ from napari.types import LayerDataTuple
 from napari.utils import progress
 from napari.utils.notifications import show_info
 from skimage.filters import threshold_otsu
+
+from arcospx.utils import tracker_to_napari_tracks
 
 
 def do_nothing_function():
@@ -54,8 +57,6 @@ def remove_background(
 
 def _on_thresholder_init(widget):
     def update_slider(image: Image):
-        # probably don't want to read then throw this array away...
-        # but just an example
         min_value = np.min(image.data)
         max_value = np.max(image.data)
         widget.threshold.max = max_value
@@ -63,6 +64,8 @@ def _on_thresholder_init(widget):
         widget.threshold.value = threshold_otsu(image.data)
 
     widget.image_selector.changed.connect(update_slider)
+    if widget.image_selector.value is not None:
+        update_slider(widget.image_selector.value)
 
 
 @magic_factory(
@@ -91,70 +94,164 @@ def _on_track_events_init(widget):
 
 
 @magic_factory(
-    arcos_worker={"visible": False}, minClSz={"min": 1, "max": 100000}, widget_init=_on_track_events_init
+    arcos_worker={"visible": False},
+    widget_init=_on_track_events_init,
+    call_button="Run",
+    eps={
+        "tooltip": "Clustering distance threshold (per frame). Adjusted for downscaling."
+    },
+    eps_prev={
+        "tooltip": "Linking distance to previous frames. Set 0 to disable. Adjusted for downscaling."
+    },
+    min_clustersize={
+        "tooltip": "Minimum cluster size (pixels). Adjusted for downscaling and dimensionality."
+    },
+    n_prev={"tooltip": "Number of previous frames to consider for linking."},
+    split_merge_stability={
+        "tooltip": "Minimum stable frames before allowing splits/merges (0=disable)."
+    },
+    downscale={
+        "tooltip": "Downsampling factor for faster processing (>=1). Affects spatial parameters."
+    },
+    use_predictor={
+        "tooltip": "Use motion prediction for better linking between frames."
+    },
+    remove_small_clusters={
+        "tooltip": "Remove clusters smaller than min_clustersize after tracking."
+    },
+    dims={
+        "tooltip": "Dimension order of input data. Spatial dimensions (X,Y,Z) affect parameter scaling."
+    },
 )
 def track_events(
     image_selector: Image,
     arcos_worker: Union[FunctionWorker, None] = None,
     eps: float = 1.5,
-    epsPrev: float = 0,
-    minClSz: int = 9,
-    nPrev: int = 1,
-    downscale=1,
+    eps_prev: float = 0,
+    min_clustersize: int = 9,
+    n_prev: int = 1,
+    split_merge_stability: int = 0,
+    downscale: int = 1,
     use_predictor: bool = False,
-    dims: str = "TXY",
+    remove_small_clusters: bool = False,
+    dims: Literal["TXY", "TYX", "TZXY", "ZTYX", "XY", "ZYX"] = "TXY",
 ) -> FunctionWorker[LayerDataTuple]:
     if arcos_worker is not None and arcos_worker.is_running:
         arcos_worker.quit()
         show_info("Operation aborted by user.")
         return FunctionWorker(do_nothing_function)
 
+    # Validate parameters
+    if downscale < 1:
+        raise ValueError("Downscale must be ≥1")
+    if min_clustersize < 1:
+        raise ValueError("min_clustersize must be ≥1")
+
     pbar = progress(total=image_selector.data.shape[0])
 
     @thread_worker(connect={"finished": pbar.close, "yielded": pbar.update})
-    def track_events_2() -> LayerDataTuple:
-        # Reset the abort flag at the start of each executio
+    def track_events_worker() -> list[LayerDataTuple]:
+        try:
+            selected_image = image_selector.data
+            spatial_dims = sum(1 for c in dims.upper() if c in {"X", "Y", "Z"})
 
-        selected_image = image_selector.data
-        # Adjust parameters based on dimensionality
+            # Adjust parameters for downscaling
+            eps_adjusted = eps / downscale
+            eps_prev_adjusted = eps_prev / downscale if eps_prev else None
+            min_clustersize_adjusted = max(
+                1, int(min_clustersize / (downscale**spatial_dims))
+            )
 
-        layer_properties = {
-            "name": f"{image_selector.name} tracked",
-            "metadata": {
+            linker = Linker(
+                eps=eps_adjusted,
+                eps_prev=eps_prev_adjusted,
+                min_clustersize=min_clustersize_adjusted,
+                n_prev=n_prev,
+                predictor=use_predictor,
+                allow_merges=split_merge_stability > 0,
+                allow_splits=split_merge_stability > 0,
+                stability_threshold=split_merge_stability,
+                remove_small_clusters=remove_small_clusters,
+            )
+
+            tracker = ImageTracker(linker, downscale)
+            img_tracked = np.zeros_like(selected_image, dtype=np.uint16)
+
+            for idx, timepoint in enumerate(
+                tracker.track(selected_image, dims)
+            ):
+                img_tracked[idx] = timepoint
+                yield 1
+
+            # Prepare layer metadata
+            meta = {
                 "eps": eps,
-                "epsPrev": epsPrev,
-                "minClSz": minClSz,
-                "nPrev": nPrev,
-                "filename": image_selector.name,  ## eg. setting medatada to the name of the image layer
-            },
-        }
+                "eps_prev": eps_prev,
+                "min_clustersize": min_clustersize,
+                "n_prev": n_prev,
+                "split_merge_stability": split_merge_stability,
+                "downscale": downscale,
+                "use_predictor": use_predictor,
+                "remove_small_clusters": remove_small_clusters,
+                "dims": dims,
+                "spatial_dims": spatial_dims,
+                "adjusted_eps": eps_adjusted,
+                "adjusted_min_clustersize": min_clustersize_adjusted,
+            }
 
-        # Determine the dimensionality
-        spatial_dims = set("XYZ")
-        D = len([d for d in dims if d in spatial_dims])
+            layers = [
+                (
+                    img_tracked,
+                    {
+                        "name": f"{image_selector.name} tracked",
+                        "metadata": meta,
+                    },
+                    "labels",
+                )
+            ]
 
-        # Adjust parameters based on dimensionality
-        adjusted_eps = eps / downscale
-        adjusted_epsPrev = epsPrev / downscale if epsPrev else None
-        adjusted_minClSz = int(minClSz / (downscale**D))
+            # Always generate tracks if any events detected
+            if np.any(img_tracked > 0):
+                data, properties, graph = tracker_to_napari_tracks(
+                    linker.lineage_tracker,
+                    label_stack=img_tracked.astype(int),
+                    spacing=(1.0, 1.0, 1.0),
+                    time_axis=0,
+                )
+                layers.append(
+                    (
+                        data,
+                        {
+                            "name": f"{image_selector.name} tracks",
+                            "properties": properties,
+                            "graph": graph,
+                            "metadata": meta,
+                        },
+                        "tracks",
+                    )
+                )
 
-        linker = Linker(
-            eps=adjusted_eps,
-            epsPrev=adjusted_epsPrev,
-            minClSz=adjusted_minClSz,
-            nPrev=nPrev,
-            predictor=use_predictor,
-        )
-        tracker = ImageTracker(linker, downscale)
-        # find indices of T in dims
-        img_tracked = np.zeros_like(selected_image, dtype=np.uint16)
-        for idx, timepoint in enumerate(tracker.track(selected_image, dims)):
-            img_tracked[idx] = timepoint
-            yield 1
+            return layers
+        except Exception as e:
+            show_info(f"Error during tracking: {str(e)}")
+            raise
 
-        sleep(0.1)  # need this for the tests to pass ...
-        return (img_tracked, layer_properties, "labels")
+    worker = track_events_worker()
 
-    # return the layer data tuple
-    arcos_worker = track_events_2()
-    return arcos_worker
+    # Add error handling
+    def handle_error(exc):
+        show_info(f"Tracking failed: {str(exc)}")
+
+    worker.errored.connect(handle_error)
+    return worker
+
+
+if __name__ == "__main__":
+    import napari
+    from napari import Viewer
+
+    viewer = Viewer()
+    viewer.window.add_dock_widget(remove_background())
+    viewer.window.add_dock_widget(thresholder())
+    viewer.window.add_dock_widget(track_events())
+    napari.run()

@@ -47,9 +47,9 @@ def test_track_events(make_napari_viewer, qtbot):
     )
     widget.image_selector.value = viewer.layers["test_img"]
     widget.eps.value = 1
-    widget.epsPrev.value = 0
-    widget.minClSz.value = 1
-    widget.nPrev.value = 1
+    widget.eps_prev.value = 0
+    widget.min_clustersize.value = 1
+    widget.n_prev.value = 1
 
     with qtbot.waitSignal(
         viewer.layers.events.inserted,
