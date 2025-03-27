@@ -100,13 +100,13 @@ def _on_track_events_init(widget):
     eps={
         "tooltip": "Clustering distance threshold (per frame). Adjusted for downscaling."
     },
-    epsPrev={
+    eps_prev={
         "tooltip": "Linking distance to previous frames. Set 0 to disable. Adjusted for downscaling."
     },
-    minClSz={
+    min_clustersize={
         "tooltip": "Minimum cluster size (pixels). Adjusted for downscaling and dimensionality."
     },
-    nPrev={"tooltip": "Number of previous frames to consider for linking."},
+    n_prev={"tooltip": "Number of previous frames to consider for linking."},
     split_merge_stability={
         "tooltip": "Minimum stable frames before allowing splits/merges (0=disable)."
     },
@@ -117,7 +117,7 @@ def _on_track_events_init(widget):
         "tooltip": "Use motion prediction for better linking between frames."
     },
     remove_small_clusters={
-        "tooltip": "Remove clusters smaller than minClSz after tracking."
+        "tooltip": "Remove clusters smaller than min_clustersize after tracking."
     },
     dims={
         "tooltip": "Dimension order of input data. Spatial dimensions (X,Y,Z) affect parameter scaling."
@@ -127,9 +127,9 @@ def track_events(
     image_selector: Image,
     arcos_worker: Union[FunctionWorker, None] = None,
     eps: float = 1.5,
-    epsPrev: float = 0,
-    minClSz: int = 9,
-    nPrev: int = 1,
+    eps_prev: float = 0,
+    min_clustersize: int = 9,
+    n_prev: int = 1,
     split_merge_stability: int = 0,
     downscale: int = 1,
     use_predictor: bool = False,
@@ -144,8 +144,8 @@ def track_events(
     # Validate parameters
     if downscale < 1:
         raise ValueError("Downscale must be ≥1")
-    if minClSz < 1:
-        raise ValueError("minClSz must be ≥1")
+    if min_clustersize < 1:
+        raise ValueError("min_clustersize must be ≥1")
 
     pbar = progress(total=image_selector.data.shape[0])
 
@@ -157,16 +157,16 @@ def track_events(
 
             # Adjust parameters for downscaling
             eps_adjusted = eps / downscale
-            epsPrev_adjusted = epsPrev / downscale if epsPrev else None
-            minClSz_adjusted = max(
-                1, int(minClSz / (downscale**spatial_dims))
+            eps_prev_adjusted = eps_prev / downscale if eps_prev else None
+            min_clustersize_adjusted = max(
+                1, int(min_clustersize / (downscale**spatial_dims))
             )
 
             linker = Linker(
                 eps=eps_adjusted,
-                epsPrev=epsPrev_adjusted,
-                minClSz=minClSz_adjusted,
-                nPrev=nPrev,
+                eps_prev=eps_prev_adjusted,
+                min_clustersize=min_clustersize_adjusted,
+                n_prev=n_prev,
                 predictor=use_predictor,
                 allow_merges=split_merge_stability > 0,
                 allow_splits=split_merge_stability > 0,
@@ -186,9 +186,9 @@ def track_events(
             # Prepare layer metadata
             meta = {
                 "eps": eps,
-                "epsPrev": epsPrev,
-                "minClSz": minClSz,
-                "nPrev": nPrev,
+                "eps_prev": eps_prev,
+                "min_clustersize": min_clustersize,
+                "n_prev": n_prev,
                 "split_merge_stability": split_merge_stability,
                 "downscale": downscale,
                 "use_predictor": use_predictor,
@@ -196,7 +196,7 @@ def track_events(
                 "dims": dims,
                 "spatial_dims": spatial_dims,
                 "adjusted_eps": eps_adjusted,
-                "adjusted_minClSz": minClSz_adjusted,
+                "adjusted_min_clustersize": min_clustersize_adjusted,
             }
 
             layers = [
