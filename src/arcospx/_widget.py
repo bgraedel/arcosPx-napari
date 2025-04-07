@@ -6,6 +6,7 @@ from time import sleep
 from typing import Literal, Union
 
 import numpy as np
+from arcos4py.tools import estimate_eps as estimate_eps_func
 from arcos4py.tools import remove_image_background
 from arcos4py.tools._detect_events import ImageTracker, Linker
 from magicgui import magic_factory
@@ -85,18 +86,32 @@ def _on_track_events_init(widget):
     def _reset_callbutton_name():
         widget.call_button.text = "Run"
 
-    def _set_widget_worker(funciton_worker):
-        widget.arcos_worker.value = funciton_worker
-        widget.call_button.text = "Abort"
-        widget.arcos_worker.value.finished.connect(_reset_callbutton_name)
+    def _set_widget_worker(function_worker: FunctionWorker):
+        if function_worker:
+            widget.call_button.text = "Abort"
+            function_worker.finished.connect(_reset_callbutton_name)
+            function_worker.errored.connect(_reset_callbutton_name)
+            widget.arcos_worker.value = function_worker
+
+    def _on_eps_changed(value):
+        if widget.estimate_eps.value == "Manual":
+            widget.eps.enabled = True
+        else:
+            widget.eps.enabled = False
 
     widget.called.connect(_set_widget_worker)
+    widget.estimate_eps.changed.connect(_on_eps_changed)
 
 
 @magic_factory(
     arcos_worker={"visible": False},
     widget_init=_on_track_events_init,
     call_button="Run",
+    estimate_eps={
+        "widget_type": "Combobox",
+        "choices": ["Manual", "Mean", "Kneepoint"],
+        "tooltip": "Estimate eps automatically. Tip: Mean is faster and works well for most cases, kneepoint should be more accurate.",
+    },
     eps={
         "tooltip": "Clustering distance threshold (per frame). Adjusted for downscaling."
     },
@@ -126,6 +141,7 @@ def _on_track_events_init(widget):
 def track_events(
     image_selector: Image,
     arcos_worker: Union[FunctionWorker, None] = None,
+    estimate_eps: Literal["Manual", "Mean", "Kneepoint"] = "Manual",
     eps: float = 1.5,
     eps_prev: float = 0,
     min_clustersize: int = 9,
@@ -135,17 +151,64 @@ def track_events(
     use_predictor: bool = False,
     remove_small_clusters: bool = False,
     dims: Literal["TXY", "TYX", "TZXY", "ZTYX", "XY", "ZYX"] = "TXY",
-) -> FunctionWorker[LayerDataTuple]:
+) -> FunctionWorker[list[LayerDataTuple]]:
     if arcos_worker is not None and arcos_worker.is_running:
         arcos_worker.quit()
         show_info("Operation aborted by user.")
         return FunctionWorker(do_nothing_function)
 
+    if image_selector is None:
+        show_info("No image selected.")
+        worker = FunctionWorker(
+            do_nothing_function
+        )  # somehow this is needed to properly reset the call button, for sure there is a better way but i guess it works for now....
+        worker.start()
+        return worker
+
+    # if the image is not binary throw an error
+    if np.unique(image_selector.data).size > 2:
+        show_info("Input image must be binary.")
+        worker = FunctionWorker(do_nothing_function)
+        worker.start()
+        return worker
+
     # Validate parameters
     if downscale < 1:
-        raise ValueError("Downscale must be ≥1")
+        show_info("Downscale factor must be ≥1.")
+        worker = FunctionWorker(do_nothing_function)
+        worker.start()
+        return worker
+
     if min_clustersize < 1:
-        raise ValueError("min_clustersize must be ≥1")
+        show_info("Minimum cluster size must be ≥1.")
+        worker = FunctionWorker(do_nothing_function)
+        worker.start()
+        return worker
+
+    if estimate_eps == "Mean":
+        eps = estimate_eps_func(
+            image=image_selector.data,
+            n_neighbors=min_clustersize,
+            plot=False,
+            binarize_threshold=0,
+            method="mean",
+        )
+    elif estimate_eps == "Kneepoint":
+        eps = estimate_eps_func(
+            image=image_selector.data,
+            n_neighbors=min_clustersize,
+            plot=False,
+            S=7,
+            binarize_threshold=0,
+            method="kneepoint",
+            max_samples=10000,
+            direction="increasing",
+            interp_method="polynomial",
+            polynomial_degree=7,
+            online=True,
+        )
+
+    track_events.eps.value = eps
 
     pbar = progress(total=image_selector.data.shape[0])
 
@@ -247,11 +310,10 @@ def track_events(
 
 
 if __name__ == "__main__":
-    import napari
     from napari import Viewer
 
     viewer = Viewer()
-    viewer.window.add_dock_widget(remove_background())
-    viewer.window.add_dock_widget(thresholder())
+    # viewer.window.add_dock_widget(remove_background())
+    # viewer.window.add_dock_widget(thresholder())
     viewer.window.add_dock_widget(track_events())
-    napari.run()
+    viewer.show(block=True)
