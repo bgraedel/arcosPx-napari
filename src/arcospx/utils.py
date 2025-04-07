@@ -138,7 +138,7 @@ def tracker_to_napari_tracks(
     # Collect data for napari tracks
     # The data array has columns: [track_id, frame, z, y, x] or [track_id, frame, y, x]
     data_cols = ["track_id", "frame"] + position_cols
-    positions_df["frame"] = positions_df["frame"] - positions_df["frame"].min()
+    positions_df["frame"] = positions_df["frame"].astype(int)
     data = positions_df[data_cols].to_numpy()
 
     # Collect properties
