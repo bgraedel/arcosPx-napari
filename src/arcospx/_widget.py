@@ -17,7 +17,10 @@ from napari.utils import progress
 from napari.utils.notifications import show_info
 from skimage.filters import threshold_otsu
 
-from arcospx.utils import tracker_to_napari_tracks
+from arcospx.utils import (
+    remap_label_image_to_lineage,
+    tracker_to_napari_tracks,
+)
 
 
 def do_nothing_function():
@@ -99,8 +102,18 @@ def _on_track_events_init(widget):
         else:
             widget.eps.enabled = False
 
+    def _on_stability_threshold_changed(value):
+        if value > 0:
+            widget.create_lineage_map.enabled = True
+        else:
+            widget.create_lineage_map.enabled = False
+
     widget.called.connect(_set_widget_worker)
     widget.estimate_eps.changed.connect(_on_eps_changed)
+    widget.split_merge_stability.changed.connect(
+        _on_stability_threshold_changed
+    )
+    widget.create_lineage_map.enabled = False
 
 
 @magic_factory(
@@ -149,7 +162,9 @@ def track_events(
     split_merge_stability: int = 0,
     downscale: int = 1,
     use_predictor: bool = False,
-    remove_small_clusters: bool = False,
+    remove_small_clusters: bool = True,
+    create_tracks_layer: bool = True,
+    create_lineage_map: bool = False,
     dims: Literal["TXY", "TYX", "TZXY", "ZTYX", "XY", "ZYX"] = "TXY",
 ) -> FunctionWorker[list[LayerDataTuple]]:
     if arcos_worker is not None and arcos_worker.is_running:
@@ -274,7 +289,7 @@ def track_events(
             ]
 
             # Always generate tracks if any events detected
-            if np.any(img_tracked > 0):
+            if np.any(img_tracked > 0) and create_tracks_layer:
                 data, properties, graph = tracker_to_napari_tracks(
                     linker.lineage_tracker,
                     label_stack=img_tracked.astype(int),
@@ -291,6 +306,21 @@ def track_events(
                             "metadata": meta,
                         },
                         "tracks",
+                    )
+                )
+
+            if create_lineage_map and split_merge_stability > 0:
+                lineage_map = remap_label_image_to_lineage(
+                    img_tracked, linker.lineage_tracker
+                )
+                layers.append(
+                    (
+                        lineage_map,
+                        {
+                            "name": f"{image_selector.name} lineage map",
+                            "metadata": meta,
+                        },
+                        "labels",
                     )
                 )
 

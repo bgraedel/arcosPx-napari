@@ -156,3 +156,36 @@ def tracker_to_napari_tracks(
             graph[parent_id] = child_ids
 
     return data, properties, graph
+
+
+def remap_label_image_to_lineage(
+    label_image,
+    lineage_tracker,
+    time_axis=0,
+):
+    """
+    Remaps a label image to match the lineage tracker.
+
+    Args:
+        label_image (numpy.ndarray): Label image to be remapped.
+        lineage_tracker (LineageTracker): Instance of LineageTracker.
+        time_axis (int): The axis corresponding to time in the label_image.
+
+    Returns:
+        numpy.ndarray: Remapped label image.
+    """
+    # Move the time axis to the first position
+    label_image = np.moveaxis(label_image, time_axis, 0)
+
+    # Initialize an empty array for the remapped label image
+    remapped_label_image = np.zeros_like(label_image)
+
+    for node in lineage_tracker.nodes.values():
+        # Get the original label ID and new ID
+        original_label = node.cluster_id
+        new_label = node.lineage_id
+
+        # Remap the labels in the frame
+        remapped_label_image[label_image == original_label] = new_label
+
+    return np.moveaxis(remapped_label_image, 0, time_axis)
