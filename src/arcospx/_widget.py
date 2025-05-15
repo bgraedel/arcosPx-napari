@@ -108,12 +108,43 @@ def _on_track_events_init(widget):
         else:
             widget.create_lineage_map.enabled = False
 
+    def set_combobox_color(widget, color):
+        qcombobox = widget.native
+        qcombobox.setStyleSheet(f"QComboBox {{ background-color: {color}; }}")
+
+    def _set_dims_as_text_label(value):
+        if widget.image.value is not None:
+            image_dims = widget.image.value.data.shape
+            selected_dims = widget.dims.value
+            # label the dimensions according to the selected Dims
+            if len(selected_dims) != len(image_dims):
+                show_info(
+                    "Selected dimensions do not match the image dimensions. Please check the input data."
+                )
+                set_combobox_color(widget.dims, "red")
+                return
+            label_string = ", ".join(
+                [
+                    f"{lab}: {dat}"
+                    for lab, dat in zip(
+                        selected_dims, image_dims, strict=False
+                    )
+                ]
+            )
+            widget.dims.label = f"Dims\n{label_string}"
+        else:
+            widget.dims.label = "Dims\n(None)"
+            set_combobox_color(widget.dims, "red")
+        set_combobox_color(widget.dims, "green")
+
     widget.called.connect(_set_widget_worker)
     widget.estimate_eps.changed.connect(_on_eps_changed)
     widget.split_merge_stability.changed.connect(
         _on_stability_threshold_changed
     )
     widget.create_lineage_map.enabled = False
+    widget.image.changed.connect(_set_dims_as_text_label)
+    widget.dims.changed.connect(_set_dims_as_text_label)
 
 
 @magic_factory(
@@ -148,13 +179,18 @@ def _on_track_events_init(widget):
         "tooltip": "Remove clusters smaller than min_clustersize after tracking."
     },
     dims={
-        "tooltip": "Dimension order of input data. Spatial dimensions (X,Y,Z) affect parameter scaling."
+        "tooltip": "Dimension order of input data. Spatial dimensions (X,Y,Z) affect parameter scaling.",
+        "label": "Dims\n(None)",
     },
 )
 def track_events(
-    image_selector: Image,
+    image: Image,
     arcos_worker: Union[FunctionWorker, None] = None,
     estimate_eps: Literal["Manual", "Mean", "Kneepoint"] = "Manual",
+    linking_method: Literal[
+        "nearest_neighbors",
+        "Sinkhorn",
+    ] = "nearest_neighbors",
     eps: float = 1.5,
     eps_prev: float = 0,
     min_clustersize: int = 9,
@@ -172,7 +208,7 @@ def track_events(
         show_info("Operation aborted by user.")
         return FunctionWorker(do_nothing_function)
 
-    if image_selector is None:
+    if image is None:
         show_info("No image selected.")
         worker = FunctionWorker(
             do_nothing_function
@@ -181,7 +217,7 @@ def track_events(
         return worker
 
     # if the image is not binary throw an error
-    if np.unique(image_selector.data).size > 2:
+    if np.unique(image.data).size > 2:
         show_info("Input image must be binary.")
         worker = FunctionWorker(do_nothing_function)
         worker.start()
@@ -202,7 +238,7 @@ def track_events(
 
     if estimate_eps == "Mean":
         eps = estimate_eps_func(
-            image=image_selector.data,
+            image=image.data,
             n_neighbors=min_clustersize,
             plot=False,
             binarize_threshold=0,
@@ -210,7 +246,7 @@ def track_events(
         )
     elif estimate_eps == "Kneepoint":
         eps = estimate_eps_func(
-            image=image_selector.data,
+            image=image.data,
             n_neighbors=min_clustersize,
             plot=False,
             S=7,
@@ -225,12 +261,12 @@ def track_events(
 
     track_events.eps.value = eps
 
-    pbar = progress(total=image_selector.data.shape[0])
+    pbar = progress(total=image.data.shape[0])
 
     @thread_worker(connect={"finished": pbar.close, "yielded": pbar.update})
     def track_events_worker() -> list[LayerDataTuple]:
         try:
-            selected_image = image_selector.data
+            selected_image = image.data
             spatial_dims = sum(1 for c in dims.upper() if c in {"X", "Y", "Z"})
 
             # Adjust parameters for downscaling
@@ -239,11 +275,17 @@ def track_events(
             min_clustersize_adjusted = max(
                 1, int(min_clustersize / (downscale**spatial_dims))
             )
+            linkin_method = (
+                "nearest"
+                if linking_method == "nearest_neighbors"
+                else "transportation"
+            )
 
             linker = Linker(
                 eps=eps_adjusted,
                 eps_prev=eps_prev_adjusted,
                 min_clustersize=min_clustersize_adjusted,
+                linking_method=linkin_method,
                 n_prev=n_prev,
                 predictor=use_predictor,
                 allow_merges=split_merge_stability > 0,
@@ -281,7 +323,7 @@ def track_events(
                 (
                     img_tracked,
                     {
-                        "name": f"{image_selector.name} tracked",
+                        "name": f"{image.name} tracked",
                         "metadata": meta,
                     },
                     "labels",
@@ -300,7 +342,7 @@ def track_events(
                     (
                         data,
                         {
-                            "name": f"{image_selector.name} tracks",
+                            "name": f"{image.name} tracks",
                             "properties": properties,
                             "graph": graph,
                             "metadata": meta,
@@ -317,7 +359,7 @@ def track_events(
                     (
                         lineage_map,
                         {
-                            "name": f"{image_selector.name} lineage map",
+                            "name": f"{image.name} lineage map",
                             "metadata": meta,
                         },
                         "labels",
@@ -325,9 +367,12 @@ def track_events(
                 )
 
             return layers
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             show_info(f"Error during tracking: {str(e)}")
-            raise
+            return layers
+        finally:
+            # Ensure the progress bar is closed even if an error occurs
+            pbar.close()
 
     worker = track_events_worker()
 
