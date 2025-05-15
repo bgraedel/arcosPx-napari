@@ -45,7 +45,7 @@ def test_track_events(make_napari_viewer, qtbot):
     _, widget = viewer.window.add_plugin_dock_widget(
         "arcosPx-napari", "Track Events"
     )
-    widget.image_selector.value = viewer.layers["test_img"]
+    widget.image.value = viewer.layers["test_img"]
     widget.eps.value = 1
     widget.eps_prev.value = 0
     widget.min_clustersize.value = 1
