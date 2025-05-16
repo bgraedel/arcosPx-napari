@@ -359,6 +359,9 @@ def track_events(
             min_clustersize_adjusted = max(
                 1, int(min_clustersize / (downscale**spatial_dims))
             )
+            min_samples_adjusted = (
+                min_samples / downscale**spatial_dims if min_samples else None
+            )
             linkin_method = (
                 "nearest"
                 if linking_method == "nearest_neighbors"
@@ -371,7 +374,9 @@ def track_events(
                 min_clustersize=min_clustersize_adjusted,
                 linking_method=linkin_method,
                 clustering_method=clustering_method,
-                min_samples=min_samples,
+                min_samples=(
+                    min_samples_adjusted if min_samples_adjusted else None
+                ),
                 n_prev=n_prev,
                 predictor=use_predictor,
                 reg=reg,
@@ -397,6 +402,7 @@ def track_events(
                 "eps": eps,
                 "eps_prev": eps_prev,
                 "min_clustersize": min_clustersize,
+                "min_samples": min_samples,
                 "n_prev": n_prev,
                 "split_merge_stability": split_merge_stability,
                 "downscale": downscale,
@@ -406,6 +412,9 @@ def track_events(
                 "spatial_dims": spatial_dims,
                 "adjusted_eps": eps_adjusted,
                 "adjusted_min_clustersize": min_clustersize_adjusted,
+                "adjusted_min_samples": min_samples_adjusted,
+                "linking_method": linking_method,
+                "clustering_method": clustering_method,
             }
 
             layers = [
@@ -458,7 +467,7 @@ def track_events(
             return layers
         except Exception as e:  # noqa: BLE001
             show_info(f"Error during tracking: {str(e)}")
-            return layers
+            return []
         finally:
             # Ensure the progress bar is closed even if an error occurs
             pbar.close()
