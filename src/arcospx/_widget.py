@@ -86,6 +86,14 @@ def thresholder(
 
 
 def _on_track_events_init(widget):
+
+    # Set default values for eps and eps_prev
+    # These values are used to store the previous values of eps and eps_prev
+    dbscan_eps = widget.eps.value
+    hdbscan_eps = 0
+    dbscan_eps_prev = widget.eps_prev.value
+    hdbscan_eps_prev = widget.eps.value
+
     def _reset_callbutton_name():
         widget.call_button.text = "Run"
 
@@ -102,11 +110,47 @@ def _on_track_events_init(widget):
         else:
             widget.eps.enabled = False
 
+    def _on_clustering_method_changed(value):
+        nonlocal dbscan_eps, hdbscan_eps, dbscan_eps_prev, hdbscan_eps_prev
+        if value == "hdbscan":
+            dbscan_eps = widget.eps.value
+            widget.eps_prev.value = dbscan_eps_prev
+            widget.min_samples.enabled = True
+            widget.min_samples.visible = True
+            widget.eps.value = hdbscan_eps
+            widget.eps_prev.value = hdbscan_eps_prev
+
+        else:
+            hdbscan_eps = widget.eps.value
+            widget.eps_prev.value = hdbscan_eps_prev
+            widget.min_samples.enabled = False
+            widget.min_samples.visible = False
+            widget.eps.value = dbscan_eps
+            widget.eps_prev.value = dbscan_eps_prev
+
+    def _on_linking_method_changed(value):
+        if value == "Sinkhorn":
+            widget.reg.enabled = True
+            widget.reg_m.enabled = True
+            widget.cost_threshold.enabled = True
+            widget.reg.visible = True
+            widget.reg_m.visible = True
+            widget.cost_threshold.visible = True
+        else:
+            widget.reg.enabled = False
+            widget.reg_m.enabled = False
+            widget.cost_threshold.enabled = False
+            widget.reg.visible = False
+            widget.reg_m.visible = False
+            widget.cost_threshold.visible = False
+
     def _on_stability_threshold_changed(value):
         if value > 0:
             widget.create_lineage_map.enabled = True
+            widget.create_lineage_map.visible = True
         else:
             widget.create_lineage_map.enabled = False
+            widget.create_lineage_map.visible = False
 
     def set_combobox_color(widget, color):
         qcombobox = widget.native
@@ -145,6 +189,8 @@ def _on_track_events_init(widget):
     widget.create_lineage_map.enabled = False
     widget.image.changed.connect(_set_dims_as_text_label)
     widget.dims.changed.connect(_set_dims_as_text_label)
+    widget.clustering_method.changed.connect(_on_clustering_method_changed)
+    widget.linking_method.changed.connect(_on_linking_method_changed)
 
 
 @magic_factory(
@@ -157,7 +203,7 @@ def _on_track_events_init(widget):
         "tooltip": "Estimate eps automatically. Tip: Mean is faster and works well for most cases, kneepoint should be more accurate.",
     },
     eps={
-        "tooltip": "Clustering distance threshold (per frame). Adjusted for downscaling."
+        "tooltip": "Clustering distance threshold (per frame). Adjusted for downscaling. For HDBSCAN it represents a distance threshold below which clusters will be merged."
     },
     eps_prev={
         "tooltip": "Linking distance to previous frames. Set 0 to disable. Adjusted for downscaling."
@@ -165,9 +211,39 @@ def _on_track_events_init(widget):
     min_clustersize={
         "tooltip": "Minimum cluster size (pixels). Adjusted for downscaling and dimensionality."
     },
+    min_samples={
+        "tooltip": "Minimum samples for HDBSCAN. If 0, the same value as min clusterisze is used. Adjusted for downscaling.",
+        "visible": False,
+    },
     n_prev={"tooltip": "Number of previous frames to consider for linking."},
     split_merge_stability={
-        "tooltip": "Minimum stable frames before allowing splits/merges (0=disable)."
+        "tooltip": "Minimum stable frames before allowing splits/merges (0=disable).",
+        "visible": True,
+    },
+    linking_method={
+        "widget_type": "Combobox",
+        "choices": ["nearest_neighbors", "Sinkhorn"],
+        "tooltip": "Linking method for tracking. Siknkhorn uses unbalanced optimal transport. eps_prev is used to generate potential link candiates for the cost matrix.\n Skinkhorn is much slower",
+    },
+    clustering_method={
+        "widget_type": "Combobox",
+        "choices": ["dbscan", "hdbscan"],
+        "tooltip": "Clustering method for tracking. HDBSCAN relaxes the eps parameter and enables clustering of veraiations in density.",
+    },
+    reg={
+        "tooltip": "Entropy regularization parameter for unbalanced OT algorithm.",
+        "visible": False,
+    },
+    reg_m={
+        "tooltip": "Marginal relaxation parameter for unbalanced OT.",
+        "visible": False,
+    },
+    cost_threshold={
+        "tooltip": "Cost threshold for filtering low-probability matches for Sinkhorn linking.",
+        "visible": False,
+        "min": 0.00000001,
+        "max": 10,
+        "step": 0.0000001,
     },
     downscale={
         "tooltip": "Downsampling factor for faster processing (>=1). Affects spatial parameters."
@@ -191,9 +267,17 @@ def track_events(
         "nearest_neighbors",
         "Sinkhorn",
     ] = "nearest_neighbors",
+    clustering_method: Literal[
+        "dbscan",
+        "hdbscan",
+    ] = "dbscan",
     eps: float = 1.5,
     eps_prev: float = 0,
     min_clustersize: int = 9,
+    min_samples: int = 0,
+    reg: float = 1,
+    reg_m: float = 10,
+    cost_threshold: float = 0,
     n_prev: int = 1,
     split_merge_stability: int = 0,
     downscale: int = 1,
@@ -286,8 +370,13 @@ def track_events(
                 eps_prev=eps_prev_adjusted,
                 min_clustersize=min_clustersize_adjusted,
                 linking_method=linkin_method,
+                clustering_method=clustering_method,
+                min_samples=min_samples,
                 n_prev=n_prev,
                 predictor=use_predictor,
+                reg=reg,
+                reg_m=reg_m,
+                cost_threshold=cost_threshold,
                 allow_merges=split_merge_stability > 0,
                 allow_splits=split_merge_stability > 0,
                 stability_threshold=split_merge_stability,
