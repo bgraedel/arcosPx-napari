@@ -284,7 +284,7 @@ def track_events(
     downscale: int = 1,
     use_predictor: bool = False,
     remove_small_clusters: bool = True,
-    create_tracks_layer: bool = True,
+    create_tracks_layer: bool = False,
     create_lineage_map: bool = False,
     dims: Literal["TXY", "TYX", "TZXY", "ZTYX", "XY", "ZYX"] = "TYX",
 ) -> FunctionWorker[list[LayerDataTuple]]:
